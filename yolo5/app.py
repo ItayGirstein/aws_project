@@ -9,7 +9,8 @@ import boto3
 images_bucket = os.environ['BUCKET_NAME']
 queue_name = os.environ['SQS_QUEUE_NAME']
 
-sqs_client = boto3.client('sqs', region_name='YOUR_REGION_HERE')
+s3 = boto3.client('s3')
+sqs_client = boto3.client('sqs', region_name='eu-north-1')
 
 with open("data/coco128.yaml", "r") as stream:
     names = yaml.safe_load(stream)['names']
@@ -29,9 +30,13 @@ def consume():
             logger.info(f'prediction: {prediction_id}. start processing')
 
             # Receives a URL parameter representing the image to download from S3
-            img_name = ...  # TODO extract from `message`
-            chat_id = ...  # TODO extract from `message`
-            original_img_path = ...  # TODO download img_name from S3, store the local image path in original_img_path
+            img_name, chat_id = message.split('+')  # TODO extract from `message`
+            original_img_path = img_name  # TODO download img_name from S3, store the local image path in original_img_path
+            try:
+                s3.download_file(images_bucket, img_name, original_img_path)
+                time.sleep(3)
+            except Exception as e:
+                print(f'Error: {e}')
 
             logger.info(f'prediction: {prediction_id}/{original_img_path}. Download img completed')
 
@@ -48,10 +53,12 @@ def consume():
             logger.info(f'prediction: {prediction_id}/{original_img_path}. done')
 
             # This is the path for the predicted image with labels
-            # The predicted image typically includes bounding boxes drawn around the detected objects, along with class labels and possibly confidence scores.
+            # The predicted image typically includes bounding boxes drawn around the detected objects,
+            # along with class labels and possibly confidence scores.
             predicted_img_path = Path(f'static/data/{prediction_id}/{original_img_path}')
 
-            # TODO Uploads the predicted image (predicted_img_path) to S3 (be careful not to override the original image).
+            # TODO Uploads the predicted image(predicted_img_path) to S3 (be careful not to override the original image)
+            s3.upload_file(predicted_img_path, images_bucket, f'predicted_{img_name}')
 
             # Parse prediction labels and create a summary
             pred_summary_path = Path(f'static/data/{prediction_id}/labels/{original_img_path.split(".")[0]}.txt')
